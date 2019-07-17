@@ -73,9 +73,6 @@ fn biot(
     let mut b_y = Array3::<f64>::zeros(jy.dim());
     let mut b_z = Array3::<f64>::zeros(jz.dim());
 
-    let total_size = (jx.shape()[0] * jx.shape()[1] * jx.shape()[2]) as u64;
-    let bar = ProgressBar::new(total_size);
-
     println!("starting calculations");
     Zip::indexed(&mut b_x)
         .and(&mut b_y)
@@ -106,7 +103,6 @@ fn biot(
                     }
                 }
             }
-            bar.inc(1);
         });
 
     println!("calculations done");
