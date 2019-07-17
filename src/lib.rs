@@ -16,8 +16,6 @@ use ndarray_parallel::prelude::*;
 
 use ndarray_linalg::norm::Norm;
 
-use indicatif::ProgressBar;
-
 use std::f64;
 use std::fs::File;
 use std::io::prelude::*;
@@ -193,14 +191,8 @@ fn export_jmol(
     write!(file, "background white \n").unwrap();
 }
 
-#[pyfunction]
-fn get_info() {
-    println!("it works");
-}
-
 #[pymodule]
 fn libbiot_savart(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(get_info))?;
     m.add_wrapped(wrap_pyfunction!(biot))?;
 
     Ok(())
