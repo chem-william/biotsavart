@@ -18,7 +18,6 @@ ndarray-parallel = "0.9.0"
 ndarray-stats = "0.2.0"
 ndarray-linalg = "0.11.1"
 ndarray = "0.12.1"
-indicatif = "0.11.0"
 
 [dependencies.pyo3]
 version = "0.7.0"
