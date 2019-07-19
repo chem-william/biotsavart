@@ -1,9 +1,12 @@
 extern crate ndarray_linalg;
 extern crate ndarray_parallel;
 extern crate ndarray_stats;
+extern crate faster;
 
 #[macro_use]
 extern crate ndarray;
+
+use faster::*;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -64,7 +67,7 @@ fn biot(
     let mut b_x = Array3::<f64>::zeros(jx.dim());
     let mut b_y = Array3::<f64>::zeros(jy.dim());
     let mut b_z = Array3::<f64>::zeros(jz.dim());
-    let mu0 = 1.256_637_0614e-6; //mu_0 in units of Tesla*meter/Ampere
+    let mu0 = 1.256_637_061_4e-6; //mu_0 in units of Tesla*meter/Ampere
 
     println!("starting calculations");
     Zip::indexed(&mut b_x)
@@ -89,9 +92,9 @@ fn biot(
                         let r3 = r.norm_l2().powf(3.0);
 
                         if r3 != 0.0 {
-                            *result_x += (-r[1] * jz_val + jy_val * r[2]) / &r3;
-                            *result_y += (r[0] * jz_val - jx_val * r[2]) / &r3;
-                            *result_z += (-r[0] * jy_val + jx_val * r[1]) / &r3;
+                            *result_x += (-r[1] * jz_val + jy_val * r[2]) / r3;
+                            *result_y += (r[0] * jz_val - jx_val * r[2]) / r3;
+                            *result_z += (-r[0] * jy_val + jx_val * r[1]) / r3;
                         }
                     }
                 }
