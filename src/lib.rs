@@ -1,12 +1,8 @@
 extern crate ndarray_linalg;
 extern crate ndarray_parallel;
-extern crate ndarray_stats;
-extern crate faster;
 
 #[macro_use]
 extern crate ndarray;
-
-use faster::*;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
