@@ -105,12 +105,10 @@ fn biot(
     let mut b_x = Array3::<f64>::zeros(jx.dim());
     let mut b_y = Array3::<f64>::zeros(jy.dim());
     let mut b_z = Array3::<f64>::zeros(jz.dim());
-    let mu0 = 1.256_637_061_4e-6; //mu_0 in units of Tesla*meter/Ampere
 
     println!("Calculating m..");
     let m_vec = calculate_magnetization(center, &jx, &jy, &jz, &x_cor, &y_cor, &z_cor);
 
-    println!("Calculating magnetic field B(r)..");
     Zip::indexed(&mut b_x)
         .and(&mut b_y)
         .and(&mut b_z)
@@ -133,16 +131,13 @@ fn biot(
                         let r3 = r.norm_l2().powf(3.0);
 
                         if r3 != 0.0 {
-                            *result_x += (-r[1] * jz_val + jy_val * r[2]) / r3;
-                            *result_y += (r[0] * jz_val - jx_val * r[2]) / r3;
-                            *result_z += (-r[0] * jy_val + jx_val * r[1]) / r3;
+                            *result_x += -(-r[1] * jz_val + jy_val * r[2]) / r3;
+                            *result_y += -(r[0] * jz_val - jx_val * r[2]) / r3;
+                            *result_z += -(-r[0] * jy_val + jx_val * r[1]) / r3;
                         }
                     }
                 }
             }
-            *result_x *= mu0;
-            *result_y *= mu0;
-            *result_z *= mu0;
         });
 
     println!("Calculations done!");
