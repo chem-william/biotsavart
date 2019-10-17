@@ -14,8 +14,6 @@ use ndarray_parallel::prelude::*;
 
 use ndarray_linalg::norm::Norm;
 
-use std::time::Instant;
-
 fn convert(phi: Vec<Vec<Vec<f64>>>) -> Array3<f64> {
     let flattened: Vec<f64> = phi.concat().concat();
     let init = Array3::from_shape_vec((phi.len(), phi[0].len(), phi[0][0].len()), flattened);
@@ -66,6 +64,8 @@ fn calculate_magnetization(
 ///
 /// Parameters
 /// ----------
+/// center : ndarray
+///     Array of x-, y-, z- coordinates where the magnetization is calculated
 /// jx : ndarray
 ///     Values of Jx on a 3D grid. Has to be a matrix of size MxNxK.
 /// jy : ndarray
@@ -139,18 +139,9 @@ fn biot(
                 }
             }
         });
-
-    println!("Calculations done!");
-    println!("sums: ");
-    println!("x: {}", b_x.sum());
-    println!("y: {}", b_y.sum());
-    println!("z: {}", b_z.sum());
-    println!("=======");
-
-    println!("shapes");
-    println!("x: {:?}", b_x.shape());
-    println!("y: {:?}", b_y.shape());
-    println!("z: {:?}", b_z.shape());
+    b_x *= -1.0;
+    b_y *= -1.0;
+    b_z *= -1.0;
 
     Ok((
         b_x.into_raw_vec(),
