@@ -119,7 +119,8 @@ fn biot(
                     for (zi, z) in z_cor.iter().enumerate() {
                         let r_mark = array![*x, *y, *z];
                         let r = &b_r - &r_mark;
-                        let r3 = r.norm_l2().powf(3.0);
+                        let r_norm = r.norm_l2();
+                        let r3 = r_norm * r_norm * r_norm;
 
                         if r3 != 0.0 {
                             let jx_val = jx[[xi, yi, zi]];
