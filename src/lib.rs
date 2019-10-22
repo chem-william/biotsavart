@@ -1,7 +1,4 @@
 extern crate ndarray_linalg;
-extern crate ndarray_parallel;
-
-#[macro_use]
 extern crate ndarray;
 
 use pyo3::prelude::*;
@@ -9,8 +6,6 @@ use pyo3::wrap_pyfunction;
 
 use ndarray::prelude::*;
 use ndarray::Zip;
-
-use ndarray_parallel::prelude::*;
 
 use ndarray_linalg::norm::Norm;
 
@@ -122,26 +117,23 @@ fn biot(
             for (xi, x) in x_cor.iter().enumerate() {
                 for (yi, y) in y_cor.iter().enumerate() {
                     for (zi, z) in z_cor.iter().enumerate() {
-                        let jx_val = &jx[[xi, yi, zi]];
-                        let jy_val = &jy[[xi, yi, zi]];
-                        let jz_val = &jz[[xi, yi, zi]];
-
                         let r_mark = array![*x, *y, *z];
                         let r = &b_r - &r_mark;
                         let r3 = r.norm_l2().powf(3.0);
 
                         if r3 != 0.0 {
-                            *result_x += -(-r[1] * jz_val + jy_val * r[2]) / r3;
-                            *result_y += -(r[0] * jz_val - jx_val * r[2]) / r3;
-                            *result_z += -(-r[0] * jy_val + jx_val * r[1]) / r3;
+                            let jx_val = jx[[xi, yi, zi]];
+                            let jy_val = jy[[xi, yi, zi]];
+                            let jz_val = jz[[xi, yi, zi]];
+
+                            *result_x += (-r[1] * jz_val + jy_val * r[2]) / r3;
+                            *result_y += (r[0] * jz_val - jx_val * r[2]) / r3;
+                            *result_z += (-r[0] * jy_val + jx_val * r[1]) / r3;
                         }
                     }
                 }
             }
         });
-    b_x *= -1.0;
-    b_y *= -1.0;
-    b_z *= -1.0;
 
     Ok((
         b_x.into_raw_vec(),
