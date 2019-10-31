@@ -1,5 +1,8 @@
-extern crate ndarray_linalg;
+extern crate itertools;
 extern crate ndarray;
+extern crate simdeez;
+
+use itertools::Itertools;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -7,7 +10,9 @@ use pyo3::wrap_pyfunction;
 use ndarray::prelude::*;
 use ndarray::Zip;
 
-use ndarray_linalg::norm::Norm;
+use simdeez::sse2::*;
+use simdeez::*;
+use std::*;
 
 fn convert(phi: Vec<Vec<Vec<f64>>>) -> Array3<f64> {
     let flattened: Vec<f64> = phi.concat().concat();
@@ -26,9 +31,9 @@ fn calculate_magnetization(
     jx: &Array3<f64>,
     jy: &Array3<f64>,
     jz: &Array3<f64>,
-    x_cor: &Vec<f64>,
-    y_cor: &Vec<f64>,
-    z_cor: &Vec<f64>,
+    x_cor: &[f64],
+    y_cor: &[f64],
+    z_cor: &[f64],
 ) -> Vec<f64> {
     let mut temp_x = Array3::<f64>::zeros(jx.dim());
     let mut temp_y = Array3::<f64>::zeros(jy.dim());
@@ -78,10 +83,6 @@ fn calculate_magnetization(
 /// -------
 /// B : tuple of array_like
 ///     tuple of Bx, By and Bz. Each list has to be reshaped to match the original size of J.
-///
-/// Note
-/// ----
-/// Parallelized through the use of ndarray-parallel.
 #[pyfunction]
 fn biot(
     center: Vec<f64>,
@@ -102,35 +103,53 @@ fn biot(
     let mut b_z = Array3::<f64>::zeros(jz.dim());
 
     println!("Calculating m..");
-    let m_vec = calculate_magnetization(center, &jx, &jy, &jz, &x_cor, &y_cor, &z_cor);
+    let m_vec = calculate_magnetization(
+        center,
+        &jx,
+        &jy,
+        &jz,
+        x_cor.as_slice(),
+        y_cor.as_slice(),
+        z_cor.as_slice(),
+    );
 
     Zip::indexed(&mut b_x)
         .and(&mut b_y)
         .and(&mut b_z)
         .par_apply(|idx, result_x, result_y, result_z| {
-            let b_r = array![
+            let b_r = [
                 x_cor[idx.0] as f64,
                 y_cor[idx.1] as f64,
-                z_cor[idx.2] as f64
+                z_cor[idx.2] as f64,
             ];
 
             for (xi, x) in x_cor.iter().enumerate() {
                 for (yi, y) in y_cor.iter().enumerate() {
-                    for (zi, z) in z_cor.iter().enumerate() {
-                        let r_mark = array![*x, *y, *z];
-                        let r = &b_r - &r_mark;
-                        let r_norm = r.norm_l2();
-                        let r3 = r_norm * r_norm * r_norm;
+                    let mut chunk_idx: usize = 0;
+                    for z in &z_cor.iter().chunks(64) {
+                        let a: Vec<f64> = z.cloned().collect();
+                        let a_len = a.len();
+                        let b = a.as_slice();
 
-                        if r3 != 0.0 {
-                            let jx_val = jx[[xi, yi, zi]];
-                            let jy_val = jy[[xi, yi, zi]];
-                            let jz_val = jz[[xi, yi, zi]];
+                        let jx = jx
+                            .slice(s![xi, yi, chunk_idx..chunk_idx + a_len])
+                            .to_slice()
+                            .unwrap();
+                        let jy = jy
+                            .slice(s![xi, yi, chunk_idx..chunk_idx + a_len])
+                            .to_slice()
+                            .unwrap();
+                        let jz = jz
+                            .slice(s![xi, yi, chunk_idx..chunk_idx + a_len])
+                            .to_slice()
+                            .unwrap();
 
-                            *result_x += (-r[1] * jz_val + jy_val * r[2]) / r3;
-                            *result_y += (r[0] * jz_val - jx_val * r[2]) / r3;
-                            *result_z += (-r[0] * jy_val + jx_val * r[1]) / r3;
-                        }
+                        let res_temp = sum_compiletime(&b_r, *x, *y, b, jx, jy, jz);
+                        *result_x += res_temp.0.iter().filter(|val| !val.is_nan()).sum::<f64>();
+                        *result_y += res_temp.1.iter().filter(|val| !val.is_nan()).sum::<f64>();
+                        *result_z += res_temp.2.iter().filter(|val| !val.is_nan()).sum::<f64>();
+
+                        chunk_idx += a_len;
                     }
                 }
             }
@@ -143,6 +162,60 @@ fn biot(
         m_vec,
     ))
 }
+
+simd_compiletime_generate!(
+    fn sum(
+        b_r: &[f64; 3],
+        x: f64,
+        y: f64,
+        z: &[f64],
+        jx: &[f64],
+        jy: &[f64],
+        jz: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+        let x_arr = [x; 64];
+        let y_arr = [y; 64];
+        let rx_arr = [b_r[0]; 64];
+        let ry_arr = [b_r[1]; 64];
+        let rz_arr = [b_r[2]; 64];
+
+        let mut res_x: Vec<f64> = Vec::with_capacity(z.len());
+        let mut res_y: Vec<f64> = Vec::with_capacity(z.len());
+        let mut res_z: Vec<f64> = Vec::with_capacity(z.len());
+        res_x.set_len(z.len());
+        res_y.set_len(z.len());
+        res_z.set_len(z.len());
+
+        for i in (0..z.len()).step_by(S::VF64_WIDTH) {
+            let xv1 = S::loadu_pd(&x_arr[i]);
+            let yv1 = S::loadu_pd(&y_arr[i]);
+            let zv1 = S::loadu_pd(&z[i]);
+
+            let brx_v1 = S::loadu_pd(&rx_arr[i]);
+            let bry_v1 = S::loadu_pd(&ry_arr[i]);
+            let brz_v1 = S::loadu_pd(&rz_arr[i]);
+
+            let jx = S::loadu_pd(&jx[i]);
+            let jy = S::loadu_pd(&jy[i]);
+            let jz = S::loadu_pd(&jz[i]);
+
+            let rx = brx_v1 - xv1;
+            let ry = bry_v1 - yv1;
+            let rz = brz_v1 - zv1;
+
+            let distance = S::sqrt_pd((rx * rx) + (ry * ry) + (rz * rz));
+            let r3 = distance * distance * distance;
+
+            let result_x = (jy * rz - ry * jz) / r3;
+            let result_y = (rx * jz - jx * rz) / r3;
+            let result_z = (jx * ry - rx * jy) / r3;
+
+            S::storeu_pd(&mut res_x[i], result_x);
+            S::storeu_pd(&mut res_y[i], result_y);
+            S::storeu_pd(&mut res_z[i], result_z);
+        }
+        (res_x, res_y, res_z)
+    }
+);
 
 #[pymodule]
 fn libbiot_savart(_py: Python, m: &PyModule) -> PyResult<()> {
