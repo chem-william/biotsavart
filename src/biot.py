@@ -11,6 +11,13 @@ from numba.core import types
 from tqdm import tqdm
 
 au2A = 0.529177249
+# Convert currents from atomic units (AU/Bohr**2) to ampere/m**2
+# Breakdown of factors:
+#   6.623618183e-3    : AU => ampere
+#   au2A**(-2)        : Bohr**-2 => Å**-2
+#   1/(1e-10)**2      : Å**-2 => m**-2  (1 Å = 1e-10 m)
+# Combined constant = 6.623618183e-3 * au2A**(-2) / 1e-20
+CONVERSION = 6.623618183e-3 * au2A ** (-2) / 1e-20
 
 
 def export_jmol(bx, by, bz, x_cor, y_cor, z_cor, path: str, with_mol: bool):
@@ -174,14 +181,11 @@ def calculate_magnetic_field(
     z_cor *= au2A
     z_cor = z_cor[::SKIP]
     # j_xyz : atomic unit/Bohr**2 -> ampere/Bohr**2 -> ampere/Å**2 -> ampere/m**2
-    jx = (jx * 6.623618183e-3) * au2A ** (-2)
-    jx /= 1e-10**2
+    jx *= CONVERSION
     jx = jx[::SKIP, ::SKIP, ::SKIP]
-    jy = (jy * 6.623618183e-3) * au2A ** (-2)
-    jy /= 1e-10**2
+    jy *= CONVERSION
     jy = jy[::SKIP, ::SKIP, ::SKIP]
-    jz = (jz * 6.623618183e-3) * au2A ** (-2)
-    jz /= 1e-10**2
+    jz *= CONVERSION
     jz = jz[::SKIP, ::SKIP, ::SKIP]
 
     Bx, By, Bz = biot_savart_parallel(
